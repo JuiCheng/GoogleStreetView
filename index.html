@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArcGIS Map with Google Street View and Arrow</title>
+
+  <!-- 引入 ArcGIS API -->
+  <script src="https://js.arcgis.com/4.24/"></script>
+  
+  <!-- 引入 Google Maps API -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=YourKey&callback=initStreetView" async defer></script>
+
+  <style>
+    /* 定義地圖容器的樣式 */
+    #mapDiv {
+      height: 100vh;
+      width: 50%;
+      float: left;
+    }
+    /* 定義街景容器的樣式 */
+    #streetViewDiv {
+      height: 100vh;
+      width: 50%;
+      float: left;
+    }
+    /* 設定箭頭的樣式 */
+    .arrow {
+      width: 60px;
+      height: 30px;
+      background-color: #FF0000;
+      border-radius: 50%; /* 設定為圓形 */
+      position: absolute;
+      transform-origin: center;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%); /* 使箭頭定位於容器中央 */
+    }
+  </style>
+</head>
+<body>
+
+  <div id="mapDiv"></div> <!-- ArcGIS 地圖 -->
+  <div id="streetViewDiv"></div> <!-- Google 街景 -->
+
+  <script>
+    let mapView, streetView, arrow, pointGraphic;
+    let currentHeading = 0;  // 初始的街景角度
+    const latitude = 25.0330  // 緯度
+    const longitude = 121.5654  //   經度
+    // 使用 require 加載 ArcGIS 模塊
+    require([
+      "esri/Map", 
+      "esri/views/MapView", 
+      "esri/Graphic", 
+      "esri/geometry/Point", 
+      "esri/layers/GraphicsLayer", 
+      "esri/symbols/PictureMarkerSymbol", 
+      "dojo/domReady!"
+    ], function (Map, MapView, Graphic, Point, GraphicsLayer, PictureMarkerSymbol) {
+
+      // 創建 ArcGIS 地圖
+      const map = new Map({
+        basemap: "streets-navigation-vector" // 使用街道導航圖層
+      });
+
+      // 創建 GraphicsLayer 並加入到 map
+      const graphicsLayer = new GraphicsLayer();
+      map.add(graphicsLayer);
+
+      // 創建 MapView，並顯示在指定的容器
+      mapView = new MapView({
+        container: "mapDiv", // ArcGIS 地圖容器
+        map: map,
+        center: [longitude, latitude],  // Fenway Park 的經緯度
+        zoom: 14 // 設定地圖縮放層級
+      });
+
+      // 定義 Fenway Park 的地點
+      const point = new Point({
+        longitude: longitude,
+        latitude: latitude
+      });
+
+      // 使用箭頭圖片作為 ArcGIS 上的標記
+      const arrowSymbol = new PictureMarkerSymbol({
+        url: 'arrow.png', // 這裡的箭頭圖片需要放置在與此 HTML 文件相同目錄下的 'arrow.png' 文件
+        width: 40,
+        height: 40
+      });
+
+      // 創建圖形標記
+      pointGraphic = new Graphic({
+        geometry: point,
+        symbol: arrowSymbol
+      });
+
+      // 添加圖形到 GraphicsLayer
+      graphicsLayer.add(pointGraphic);
+
+      initStreetView();
+
+      // 地圖點擊事件，開啟街景並定位
+      mapView.on("click", function (event) {
+        const clickedPoint = event.mapPoint;
+        openStreetView(clickedPoint.longitude, clickedPoint.latitude);
+      });
+
+      // 初始化 Google 街景
+      function initStreetView() {
+        const fenwayLocation = { lat: latitude, lng: longitude };
+
+        // 創建 Google 街景
+        streetView = new google.maps.StreetViewPanorama(
+          document.getElementById('streetViewDiv'), {
+            position: fenwayLocation,
+            pov: { heading: currentHeading, pitch: 10 },
+            zoom: 1
+          }
+        );
+
+        // 當街景角度變更時，更新箭頭的旋轉角度
+        google.maps.event.addListener(streetView, 'pov_changed', function () {
+          const pov = streetView.getPov();
+          updateArrowRotation(pov.heading); // 更新箭頭角度
+        });
+
+        // 監聽街景位置變化並更新箭頭位置
+        google.maps.event.addListener(streetView, 'position_changed', function () {
+          const position = streetView.getPosition();
+          updateArrowPosition(position); // 更新箭頭位置
+        });
+      }
+
+      // 更新箭頭的旋轉角度
+      function updateArrowRotation(heading) {
+        currentHeading = heading;
+
+        // 更新 ArcGIS 上的箭頭旋轉
+        pointGraphic.symbol.angle = heading;
+
+        // 強制刷新圖層，更新圖形顯示
+        // graphicsLayer.remove(pointGraphic);  // 移除圖形
+        graphicsLayer.add(pointGraphic);     // 重新加入圖形
+      }
+
+      // 更新 ArcGIS 上箭頭的位置
+      function updateArrowPosition(position) {
+        const currentPosition = { lat: position.lat(), lng: position.lng() };
+
+        // 更新箭頭圖形位置
+        pointGraphic.geometry = new Point({
+          longitude: currentPosition.lng,
+          latitude: currentPosition.lat
+        });
+        // ArcGIS 會自動渲染圖形
+      }
+
+      // 根據 ArcGIS 點擊的位置更新街景位置
+      function openStreetView(longitude, latitude) {
+        const position = { lat: latitude, lng: longitude };
+        streetView.setPosition(position);
+      }
+    });
+  </script>
+
+</body>
+</html>
